@@ -7,11 +7,6 @@ import (
 
 func ClientLogout() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			utils.JSONError(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-
 		http.SetCookie(w, &http.Cookie{
 			Name:     "jwt_token_client",
 			Value:    "",

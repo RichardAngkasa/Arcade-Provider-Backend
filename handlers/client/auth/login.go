@@ -21,11 +21,6 @@ type ClientLoginResponse struct {
 
 func ClientLogin(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			utils.JSONError(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-
 		var req ClientLoginRequest
 		err := utils.BodyChecker(r, &req)
 		if err != nil {

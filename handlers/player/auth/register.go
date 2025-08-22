@@ -13,11 +13,6 @@ type RegisterRequest struct {
 
 func PlayerRegister(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			utils.JSONError(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-
 		ClientApiKey := r.Header.Get("X-API-Key")
 		if ClientApiKey == "" {
 			utils.JSONError(w, "api key missing", http.StatusBadRequest)

@@ -3,24 +3,21 @@ package clients
 import (
 	"database/sql"
 	"net/http"
+	"provider/middleware"
 	"provider/models"
 	"provider/utils"
 )
 
 func AdminClients(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			utils.JSONError(w, "methode not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		_, err := utils.GetIDFromToken(r, "jwt_token_admin", "admin")
+		_, err := middleware.MustAdminID(r)
 		if err != nil {
-			utils.JSONError(w, "unauthorized", http.StatusUnauthorized)
+			utils.JSONError(w, err.Error(), http.StatusUnauthorized)
 			return
 		}
 
 		rows, err := db.Query(`
-			SELECT id, username, email
+			SELECT id, username, email, password, api_key
 			FROM clients
 		`)
 		if err != nil {
@@ -32,7 +29,7 @@ func AdminClients(db *sql.DB) http.HandlerFunc {
 		var clients []models.Client
 		for rows.Next() {
 			var c models.Client
-			err := rows.Scan(&c.ID, &c.Username, &c.Email)
+			err := rows.Scan(&c.ID, &c.Username, &c.Email, &c.Password, &c.ApiKey)
 			if err != nil {
 				utils.JSONError(w, "error parsing clients", http.StatusInternalServerError)
 				return

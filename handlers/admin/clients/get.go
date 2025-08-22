@@ -3,20 +3,16 @@ package clients
 import (
 	"database/sql"
 	"net/http"
+	"provider/middleware"
 	"provider/models"
 	"provider/utils"
 )
 
 func AdminClientProfile(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			utils.JSONError(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-
-		_, err := utils.GetIDFromToken(r, "jwt_token_admin", "admin")
+		_, err := middleware.MustAdminID(r)
 		if err != nil {
-			utils.JSONError(w, "unauthorize", http.StatusUnauthorized)
+			utils.JSONError(w, err.Error(), http.StatusUnauthorized)
 			return
 		}
 
@@ -31,10 +27,10 @@ func AdminClientProfile(db *sql.DB) http.HandlerFunc {
 
 		var client models.Client
 		err = db.QueryRow(`
-			SELECT id, username, email
+			SELECT id, username, email, password, api_key
 			FROM clients
 			WHERE id = $1
-		`, req.ID).Scan(&client.ID, &client.Username, &client.Email)
+		`, req.ID).Scan(&client.ID, &client.Username, &client.Email, &client.Password, &client.ApiKey)
 		if err != nil {
 			utils.JSONError(w, "failed to fetch client profile", http.StatusInternalServerError)
 			return

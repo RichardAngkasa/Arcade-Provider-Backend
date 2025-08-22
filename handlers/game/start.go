@@ -22,11 +22,6 @@ type SpinResponse struct {
 
 func StartSpin(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			utils.JSONError(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-
 		var req SpinRequest
 		err := utils.BodyChecker(r, &req)
 		if err != nil {
@@ -93,12 +88,6 @@ func StartSpin(db *sql.DB) http.HandlerFunc {
 			}
 		}()
 
-		txErr = utils.PlayerWithdraw(tx, clientID, req.PlayerID, req.BetAmount)
-		if txErr != nil {
-			utils.JSONError(w, txErr.Error(), http.StatusInternalServerError)
-			return
-		}
-
 		var result models.GameResult
 		if req.GameID == "pikachu" {
 			r, err := RunPikachuGameLogic(req.BetAmount)
@@ -115,24 +104,36 @@ func StartSpin(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
+		txErr = utils.PlayerWithdraw(tx, clientID, req.PlayerID, req.BetAmount)
+		if txErr != nil {
+			utils.JSONError(w, txErr.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		txErr = utils.ClientDeposit(tx, clientID, req.BetAmount)
+		if txErr != nil {
+			utils.JSONError(w, txErr.Error(), http.StatusInternalServerError)
+			return
+		}
+
 		if result.Type == "win" {
-			txErr = utils.PlayerDeposit(tx, clientID, req.PlayerID, req.BetAmount)
+			txErr = utils.PlayerDeposit(tx, clientID, req.PlayerID, result.Amount)
 			if txErr != nil {
 				utils.JSONError(w, txErr.Error(), http.StatusInternalServerError)
 				return
 			}
-			txErr = utils.PlayerLogTransaction(tx, playerWallet.ID, req.PlayerID, clientID, sql.NullInt64{Int64: int64(gameSessionID), Valid: true}, req.BetAmount, "bet_win_player")
+			txErr = utils.PlayerLogTransaction(tx, playerWallet.ID, req.PlayerID, clientID, sql.NullInt64{Int64: int64(gameSessionID), Valid: true}, result.Amount, "bet_win_player")
 			if txErr != nil {
 				utils.JSONError(w, txErr.Error(), http.StatusInternalServerError)
 				return
 			}
 
-			txErr = utils.ClientWithdraw(tx, clientID, req.BetAmount)
+			txErr = utils.ClientWithdraw(tx, clientID, result.Amount)
 			if txErr != nil {
 				utils.JSONError(w, txErr.Error(), http.StatusInternalServerError)
 				return
 			}
-			txErr = utils.ClientLogTransaction(tx, clientWallet.ID, clientID, req.BetAmount, "bet_win_player")
+			txErr = utils.ClientLogTransaction(tx, clientWallet.ID, clientID, result.Amount, "bet_win_player")
 			if txErr != nil {
 				utils.JSONError(w, txErr.Error(), http.StatusInternalServerError)
 				return
@@ -140,18 +141,13 @@ func StartSpin(db *sql.DB) http.HandlerFunc {
 		}
 
 		if result.Type == "lose" {
-			txErr = utils.PlayerLogTransaction(tx, playerWallet.ID, req.PlayerID, clientID, sql.NullInt64{Int64: int64(gameSessionID), Valid: true}, req.BetAmount, "bet_lose_player")
+			txErr = utils.PlayerLogTransaction(tx, playerWallet.ID, req.PlayerID, clientID, sql.NullInt64{Int64: int64(gameSessionID), Valid: true}, result.Amount, "bet_lose_player")
 			if txErr != nil {
 				utils.JSONError(w, txErr.Error(), http.StatusInternalServerError)
 				return
 			}
 
-			txErr = utils.ClientDeposit(tx, clientID, req.BetAmount)
-			if txErr != nil {
-				utils.JSONError(w, txErr.Error(), http.StatusInternalServerError)
-				return
-			}
-			txErr = utils.ClientLogTransaction(tx, clientWallet.ID, clientID, req.BetAmount, "bet_lose_player")
+			txErr = utils.ClientLogTransaction(tx, clientWallet.ID, clientID, result.Amount, "bet_lose_player")
 			if txErr != nil {
 				utils.JSONError(w, txErr.Error(), http.StatusInternalServerError)
 				return

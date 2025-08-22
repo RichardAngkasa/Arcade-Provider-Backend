@@ -3,20 +3,16 @@ package wallet
 import (
 	"database/sql"
 	"net/http"
+	"provider/middleware"
 	"provider/models"
 	"provider/utils"
 )
 
 func PlayerWithdraw(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			utils.JSONError(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-
-		clientID, err := utils.GetIDFromToken(r, "jwt_token_client", "client")
+		clientID, err := middleware.MustClientID(r)
 		if err != nil {
-			utils.JSONResponse(w, "unauthorized", http.StatusUnauthorized)
+			utils.JSONError(w, err.Error(), http.StatusUnauthorized)
 			return
 		}
 
@@ -113,7 +109,6 @@ func PlayerWithdraw(db *sql.DB) http.HandlerFunc {
 			Data: models.PlayerWalletResponse{
 				ClientWallet:  updatedClientWallet,
 				DepositAmount: req.Amount,
-				PlayerID:      req.PlayerID,
 				PlayerWallet:  updatedPlayerWallet,
 			},
 		}, http.StatusOK)

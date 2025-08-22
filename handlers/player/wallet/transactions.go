@@ -9,11 +9,6 @@ import (
 
 func PlayerTransactions(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			utils.JSONError(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-
 		ClientApiKey := r.Header.Get("X-API-Key")
 		clientID, err := utils.GetClientIdByApiKey(db, ClientApiKey)
 		if err != nil {

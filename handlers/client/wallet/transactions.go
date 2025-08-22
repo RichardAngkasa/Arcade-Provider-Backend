@@ -3,20 +3,16 @@ package wallet
 import (
 	"database/sql"
 	"net/http"
+	"provider/middleware"
 	"provider/models"
 	"provider/utils"
 )
 
 func ClientTransactions(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			utils.JSONError(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-
-		clientID, err := utils.GetIDFromToken(r, "jwt_token_client", "client")
+		clientID, err := middleware.MustClientID(r)
 		if err != nil {
-			utils.JSONError(w, "unauthorized", http.StatusUnauthorized)
+			utils.JSONError(w, err.Error(), http.StatusUnauthorized)
 			return
 		}
 

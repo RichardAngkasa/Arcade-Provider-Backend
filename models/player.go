@@ -21,8 +21,7 @@ type PlayerWalletRequest struct {
 type PlayerWalletResponse struct {
 	ClientWallet  ClientWallet `json:"client_wallet"`
 	DepositAmount float64      `json:"amount"`
-	PlayerID      int          `json:"player_id"`
-	PlayerWallet  PlayerWallet `json:"player_Wallet"`
+	PlayerWallet  PlayerWallet `json:"player_wallet"`
 }
 
 type PlayerTransactionsRequest struct {
