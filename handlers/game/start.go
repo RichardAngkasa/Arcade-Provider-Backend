@@ -5,41 +5,24 @@ import (
 	"net/http"
 	"provider/models"
 	"provider/utils"
+
+	"gorm.io/gorm"
 )
 
-type SpinRequest struct {
-	PlayerID  int     `json:"player_id"`
-	BetAmount float64 `json:"bet_amount"`
-	GameID    string  `json:"game_id"`
-}
-
-type SpinResponse struct {
-	Symbols      map[string]string   `json:"symbols"`
-	Type         string              `json:"type"`
-	Amount       float64             `json:"amount"`
-	PlayerWallet models.PlayerWallet `json:"player_wallet"`
-}
-
-func StartSpin(db *sql.DB) http.HandlerFunc {
+func StartSpin(db *gorm.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var req SpinRequest
-		err := utils.BodyChecker(r, &req)
+		// AUTH
+		clientID, err := utils.GetClientIdByHeader(db, r)
 		if err != nil {
 			utils.JSONError(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-
-		clientKey := r.Header.Get("X-API-Key")
-		if clientKey == "" {
-			utils.JSONError(w, "api key missing", http.StatusBadRequest)
-			return
-		}
-		clientID, err := utils.GetClientIdByApiKey(db, clientKey)
+		var req models.SpinRequest
+		err = utils.BodyChecker(r, &req)
 		if err != nil {
-			utils.JSONError(w, err.Error(), http.StatusUnauthorized)
+			utils.JSONError(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-
 		err = utils.AmountLessThanZero(req.BetAmount)
 		if err != nil {
 			utils.JSONError(w, err.Error(), http.StatusBadRequest)
@@ -51,119 +34,69 @@ func StartSpin(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		playerWallet, err := utils.PlayerWallet(db, clientID, req.PlayerID)
-		if err != nil {
-			utils.JSONError(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		clientWallet, err := utils.ClientWallet(db, clientID)
-		if err != nil {
-			utils.JSONError(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		err = utils.RequestAmountLessThanBalance(req.BetAmount, playerWallet.Balance)
-		if err != nil {
-			utils.JSONError(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		tx, err := db.Begin()
-		if err != nil {
-			utils.JSONResponse(w, "failed to start game", http.StatusInternalServerError)
-			return
-		}
-		var txErr error
-		defer func() {
-			if p := recover(); p != nil {
-				tx.Rollback()
-				panic(p)
-			} else if txErr != nil {
-				tx.Rollback()
-			} else {
-				err := tx.Commit()
+		// QUERY
+		var updatedPlayerWallet models.PlayerWallet
+		var result models.GameResult
+		err = db.Transaction(func(tx *gorm.DB) error {
+			result, err = RunPikachuGameLogic(req.BetAmount)
+			if err != nil {
+				return err
+			}
+			gameSessionID, err := utils.GameLogSession(tx, clientID, req.PlayerID, req.BetAmount, result.Amount, req.GameID, result.Type)
+			if err != nil {
+				return err
+			}
+			// player pay to play
+			err = utils.PlayerDeductBalance(tx, clientID, req.PlayerID, req.BetAmount)
+			if err != nil {
+				return err
+			}
+			err = utils.ClientAddBalance(tx, clientID, req.BetAmount)
+			if err != nil {
+				return err
+			}
+			if result.Type == "win" {
+				// add balance to player
+				err = utils.PlayerAddBalance(tx, clientID, req.PlayerID, result.Amount)
 				if err != nil {
-					txErr = err
+					return err
+				}
+				err = utils.PlayerLogTransaction(tx, clientID, req.PlayerID, sql.NullInt64{Int64: int64(gameSessionID), Valid: true}, result.Amount, "bet_win_player")
+				if err != nil {
+					return err
+				}
+				// deduct balance from cleint
+				err := utils.ClientDeductBalance(tx, clientID, result.Amount)
+				if err != nil {
+					return err
+				}
+				err = utils.ClientLogTransaction(tx, clientID, result.Amount, "bet_win_player")
+				if err != nil {
+					return err
 				}
 			}
-		}()
-
-		var result models.GameResult
-		if req.GameID == "pikachu" {
-			r, err := RunPikachuGameLogic(req.BetAmount)
-			if err != nil {
-				utils.JSONError(w, "Spin Error", http.StatusInternalServerError)
-				return
+			if result.Type == "lose" {
+				// log player lost
+				err = utils.PlayerLogTransaction(tx, clientID, req.PlayerID, sql.NullInt64{Int64: int64(gameSessionID), Valid: true}, result.Amount, "bet_lose_player")
+				if err != nil {
+					return err
+				}
+				err = utils.ClientLogTransaction(tx, clientID, result.Amount, "bet_lose_player")
+				if err != nil {
+					return err
+				}
 			}
-			result = r
-		}
-
-		gameSessionID, txErr := utils.GameSessionLog(tx, req.PlayerID, clientID, req.BetAmount, result.Amount, req.GameID, result.Type)
-		if txErr != nil {
-			http.Error(w, txErr.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		txErr = utils.PlayerWithdraw(tx, clientID, req.PlayerID, req.BetAmount)
-		if txErr != nil {
-			utils.JSONError(w, txErr.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		txErr = utils.ClientDeposit(tx, clientID, req.BetAmount)
-		if txErr != nil {
-			utils.JSONError(w, txErr.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		if result.Type == "win" {
-			txErr = utils.PlayerDeposit(tx, clientID, req.PlayerID, result.Amount)
-			if txErr != nil {
-				utils.JSONError(w, txErr.Error(), http.StatusInternalServerError)
-				return
-			}
-			txErr = utils.PlayerLogTransaction(tx, playerWallet.ID, req.PlayerID, clientID, sql.NullInt64{Int64: int64(gameSessionID), Valid: true}, result.Amount, "bet_win_player")
-			if txErr != nil {
-				utils.JSONError(w, txErr.Error(), http.StatusInternalServerError)
-				return
-			}
-
-			txErr = utils.ClientWithdraw(tx, clientID, result.Amount)
-			if txErr != nil {
-				utils.JSONError(w, txErr.Error(), http.StatusInternalServerError)
-				return
-			}
-			txErr = utils.ClientLogTransaction(tx, clientWallet.ID, clientID, result.Amount, "bet_win_player")
-			if txErr != nil {
-				utils.JSONError(w, txErr.Error(), http.StatusInternalServerError)
-				return
-			}
-		}
-
-		if result.Type == "lose" {
-			txErr = utils.PlayerLogTransaction(tx, playerWallet.ID, req.PlayerID, clientID, sql.NullInt64{Int64: int64(gameSessionID), Valid: true}, result.Amount, "bet_lose_player")
-			if txErr != nil {
-				utils.JSONError(w, txErr.Error(), http.StatusInternalServerError)
-				return
-			}
-
-			txErr = utils.ClientLogTransaction(tx, clientWallet.ID, clientID, result.Amount, "bet_lose_player")
-			if txErr != nil {
-				utils.JSONError(w, txErr.Error(), http.StatusInternalServerError)
-				return
-			}
-		}
-
-		updatedPlayerWallet, txErr := utils.PlayerWallet(tx, clientID, req.PlayerID)
-		if txErr != nil {
-			utils.JSONError(w, txErr.Error(), http.StatusInternalServerError)
+			return nil
+		})
+		if err != nil {
+			utils.JSONError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 
 		utils.JSONResponse(w, utils.Response{
 			Success: true,
 			Message: "game spined successfully",
-			Data: SpinResponse{
+			Data: models.SpinResponse{
 				Symbols:      result.Symbols,
 				Type:         result.Type,
 				Amount:       result.Amount,

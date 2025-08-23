@@ -4,101 +4,52 @@ import (
 	"database/sql"
 	"errors"
 	"provider/models"
+
+	"gorm.io/gorm"
 )
 
-type Queryer interface {
-	QueryRow(query string, args ...interface{}) *sql.Row
+// CLIENT
+func ClientWallet(tx *gorm.DB, client_id int) (models.ClientWallet, error) {
+	var wallet models.ClientWallet
+	err := tx.
+		Where("client_id = ?", client_id).
+		First(&wallet).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return wallet, errors.New("client wallet not found")
+	}
+	return wallet, nil
 }
-
-func ClientDeposit(tx *sql.Tx, client_id int, amount float64) error {
-	result, err := tx.Exec(`
-		UPDATE client_wallets 
-		SET balance = balance + $1
-		WHERE client_id = $2
-	`, amount, client_id)
+func ClientAddBalance(tx *gorm.DB, client_id int, amount float64) error {
+	wallet, err := ClientWallet(tx, client_id)
 	if err != nil {
-		return errors.New("failed to client deposit")
+		return errors.New(err.Error())
 	}
-
-	rowsAffected, err := result.RowsAffected()
+	wallet.Balance += amount
+	err = tx.
+		Save(&wallet).Error
 	if err != nil {
-		return errors.New("could not check deposit result: " + err.Error())
+		return errors.New("failed to update client wallet balance: " + err.Error())
 	}
-
-	if rowsAffected == 0 {
-		return errors.New("deposit failed: client not found or no wallet got updated")
-	}
-
 	return nil
 }
-
-func ClientWithdraw(tx *sql.Tx, client_id int, amount float64) error {
-	result, err := tx.Exec(`
-		UPDATE client_wallets 
-		SET balance = balance - $1
-		WHERE client_id = $2
-	`, amount, client_id)
+func ClientDeductBalance(tx *gorm.DB, client_id int, amount float64) error {
+	wallet, err := ClientWallet(tx, client_id)
 	if err != nil {
-		return errors.New("failed to client withdraw")
+		return errors.New(err.Error())
 	}
-
-	rowsAffected, err := result.RowsAffected()
+	err = RequestAmountGreaterThanBalanceForbidden(amount, wallet.Balance)
 	if err != nil {
-		return errors.New("could not check withdraw result: " + err.Error())
+		return errors.New(err.Error())
 	}
-
-	if rowsAffected == 0 {
-		return errors.New("withdraw failed: client not found or no wallet got updated")
+	wallet.Balance -= amount
+	err = tx.
+		Save(&wallet).Error
+	if err != nil {
+		return errors.New("failed to update client wallet balance: " + err.Error())
 	}
-
 	return nil
 }
-
-func PlayerDeposit(tx *sql.Tx, client_id, player_id int, amount float64) error {
-	result, err := tx.Exec(`
-		UPDATE player_wallets 
-		SET balance = balance + $1
-		WHERE player_id = $2 AND client_id = $3
-	`, amount, player_id, client_id)
-	if err != nil {
-		return errors.New("failed to player deposit")
-	}
-
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return errors.New("could not check deposit result: " + err.Error())
-	}
-
-	if rowsAffected == 0 {
-		return errors.New("deposit failed: player not found or no wallet got updated")
-	}
-
-	return nil
-}
-
-func PlayerWithdraw(tx *sql.Tx, client_id, player_id int, amount float64) error {
-	result, err := tx.Exec(`
-		UPDATE player_wallets 
-		SET balance = balance - $1
-		WHERE player_id = $2 AND client_id = $3
-	`, amount, player_id, client_id)
-	if err != nil {
-		return errors.New("failed to player withdraw")
-	}
-
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return errors.New("could not check deposit result: " + err.Error())
-	}
-
-	if rowsAffected == 0 {
-		return errors.New("deposit failed: player not found or no wallet got updated")
-	}
-
-	return nil
-}
-
-func ClientLogTransaction(tx *sql.Tx, client_wallet_id, client_id int, ammount float64, transaction_type string) error {
+func ClientLogTransaction(tx *gorm.DB, client_id int, ammount float64, transaction_type string) error {
 	switch transaction_type {
 	case
 		"deposit",
@@ -108,19 +59,62 @@ func ClientLogTransaction(tx *sql.Tx, client_wallet_id, client_id int, ammount f
 	default:
 		return errors.New("invalid transaction type: " + transaction_type)
 	}
-
-	_, err := tx.Exec(`
-		INSERT INTO client_wallet_transactions (client_wallet_id, client_id, amount, type)
-		VALUES ($1, $2, $3, $4)
-	`, client_wallet_id, client_id, ammount, transaction_type)
+	wallet, err := ClientWallet(tx, client_id)
+	if err != nil {
+		return errors.New(err.Error())
+	}
+	ClientLogTransaction := models.ClientWalletTransaction{
+		ClientID:       client_id,
+		Amount:         ammount,
+		Type:           transaction_type,
+		ClientWalletID: wallet.ID,
+	}
+	err = tx.
+		Create(&ClientLogTransaction).Error
 	if err != nil {
 		return errors.New("failed to log client transaction" + err.Error())
 	}
-
 	return nil
 }
 
-func PlayerLogTransaction(tx *sql.Tx, wallet_id, player_id, client_id int, game_session_id sql.NullInt64, ammount float64, transaction_type string) error {
+// PLAYER
+func PlayerWallet(tx *gorm.DB, client_id, player_id int) (models.PlayerWallet, error) {
+	var wallet models.PlayerWallet
+	err := tx.
+		Where("client_id = ? AND player_id", client_id, player_id).
+		First(&wallet).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return wallet, errors.New("player wallet not found")
+	}
+	return wallet, nil
+}
+func PlayerAddBalance(tx *gorm.DB, client_id, player_id int, amount float64) error {
+	wallet, err := PlayerWallet(tx, client_id, player_id)
+	if err != nil {
+		return errors.New(err.Error())
+	}
+	wallet.Balance += amount
+	if err != nil {
+		return errors.New("failed to update player wallet balance: " + err.Error())
+	}
+	return nil
+}
+func PlayerDeductBalance(tx *gorm.DB, client_id, player_id int, amount float64) error {
+	wallet, err := PlayerWallet(tx, client_id, player_id)
+	if err != nil {
+		return errors.New(err.Error())
+	}
+	err = RequestAmountGreaterThanBalanceForbidden(amount, wallet.Balance)
+	if err != nil {
+		return errors.New(err.Error())
+	}
+	wallet.Balance -= amount
+	if err != nil {
+		return errors.New("failed to update player wallet balance: " + err.Error())
+	}
+	return nil
+}
+func PlayerLogTransaction(tx *gorm.DB, client_id, player_id int, game_session_id sql.NullInt64, ammount float64, transaction_type string) error {
 	switch transaction_type {
 	case
 		"deposit",
@@ -130,19 +124,28 @@ func PlayerLogTransaction(tx *sql.Tx, wallet_id, player_id, client_id int, game_
 	default:
 		return errors.New("invalid transaction type: " + transaction_type)
 	}
-
-	_, err := tx.Exec(`
-		INSERT INTO player_wallet_transactions (player_wallet_id, player_id, client_id, game_session_id, amount, type)
-		VALUES ($1, $2, $3, $4, $5, $6)
-	`, wallet_id, player_id, client_id, game_session_id, ammount, transaction_type)
+	wallet, err := PlayerWallet(tx, client_id, player_id)
+	if err != nil {
+		return errors.New(err.Error())
+	}
+	PlayerLogTransaction := models.PlayerWalletTransaction{
+		ClientID:      client_id,
+		PlayerID:      player_id,
+		WalletID:      wallet.ID,
+		GameSessionID: game_session_id,
+		Amount:        ammount,
+		Type:          transaction_type,
+	}
+	err = tx.
+		Create(&PlayerLogTransaction).Error
 	if err != nil {
 		return errors.New("failed to log player transaction " + err.Error())
 	}
-
 	return nil
 }
 
-func AdminLogTransaction(tx *sql.Tx, client_id int, ammount float64, transaction_type string) error {
+// ADMIN
+func AdminLogTransaction(tx *gorm.DB, client_id int, ammount float64, transaction_type string) error {
 	switch transaction_type {
 	case
 		"deposit",
@@ -150,61 +153,40 @@ func AdminLogTransaction(tx *sql.Tx, client_id int, ammount float64, transaction
 	default:
 		return errors.New("invalid transaction type: " + transaction_type)
 	}
-
-	_, err := tx.Exec(`
-		INSERT INTO admin_wallet_transactions (client_id, amount, type)
-		VALUES ($1, $2, $3)
-	`, client_id, ammount, transaction_type)
+	AdminLogTransaction := models.AdminWalletTransaction{
+		ClientID: client_id,
+		Amount:   ammount,
+		Type:     transaction_type,
+	}
+	err := tx.
+		Create(&AdminLogTransaction).Error
 	if err != nil {
 		return errors.New("failed to log admin transaction " + err.Error())
 	}
-
 	return nil
 }
 
-func ClientWallet(q Queryer, client_id int) (models.ClientWallet, error) {
-	var wallet models.ClientWallet
-	err := q.QueryRow(`
-		SELECT id, client_id, balance 
-		FROM client_wallets 
-		WHERE client_id = $1
-	`, client_id).Scan(&wallet.ID, &wallet.ClientID, &wallet.Balance)
-
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return wallet, errors.New("client wallet not found")
-		}
-		return wallet, errors.New("failed to fetch client wallet")
+// GAME
+func GameLogSession(tx *gorm.DB, client_id, player_id int, betAmount, resultAmount float64, game_id, sessionType string) (int, error) {
+	switch sessionType {
+	case
+		"win",
+		"lose":
+	default:
+		return 0, errors.New("invalid transaction type: " + sessionType)
 	}
-	return wallet, nil
-}
-
-func PlayerWallet(q Queryer, client_id, player_id int) (models.PlayerWallet, error) {
-	var wallet models.PlayerWallet
-	err := q.QueryRow(`
-		SELECT id, client_id, player_id, balance 
-		FROM player_wallets 
-		WHERE client_id = $1 AND player_id = $2
-	`, client_id, player_id).Scan(&wallet.ID, &wallet.ClientID, &wallet.PlayerID, &wallet.Balance)
-
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return wallet, errors.New("player wallet not found")
-		}
-		return wallet, errors.New("failed to fetch player wallet")
+	GameSession := models.GameSession{
+		ClientID:     client_id,
+		PlayerID:     player_id,
+		GameID:       game_id,
+		BetAmount:    betAmount,
+		ResultAmount: resultAmount,
+		Type:         sessionType,
 	}
-	return wallet, nil
-}
-
-func GameSessionLog(tx *sql.Tx, player_id, client_id int, betAmount, resultAmount float64, game_id, sessionType string) (int, error) {
-	var gameSessionID int
-	err := tx.QueryRow(`
-		INSERT INTO game_sessions (player_id, game_id, bet_amount, type, result_amount, client_id)
-		VALUES ($1, $2, $3, $4, $5, $6)
-		returning id
-	`, player_id, game_id, betAmount, sessionType, resultAmount, client_id).Scan(&gameSessionID)
+	err := tx.
+		Create(&GameSession).Error
 	if err != nil {
-		return gameSessionID, errors.New("failed to log game sessions")
+		return GameSession.ID, errors.New("failed to log game sessions")
 	}
-	return gameSessionID, nil
+	return GameSession.ID, nil
 }

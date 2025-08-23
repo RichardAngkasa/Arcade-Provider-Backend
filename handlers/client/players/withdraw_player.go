@@ -1,0 +1,88 @@
+package players
+
+import (
+	"database/sql"
+	"net/http"
+	"provider/middleware"
+	"provider/models"
+	"provider/utils"
+
+	"gorm.io/gorm"
+)
+
+func ClientPlayerWithdraw(db *gorm.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// AUTH
+		clientID, err := middleware.MustClientID(r)
+		if err != nil {
+			utils.JSONError(w, err.Error(), http.StatusUnauthorized)
+			return
+		}
+		var req models.PlayerWalletRequest
+		err = utils.BodyChecker(r, &req)
+		if err != nil {
+			utils.JSONError(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		err = utils.AmountLessThanZero(req.Amount)
+		if err != nil {
+			utils.JSONError(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		err = utils.PlayerMustExistUnderClient(db, req.PlayerID, clientID)
+		if err != nil {
+			utils.JSONError(w, err.Error(), http.StatusNotFound)
+			return
+		}
+
+		// QUERY
+		var updatedClientWallet models.ClientWallet
+		var updatedPlayerWallet models.PlayerWallet
+		err = db.Transaction(func(tx *gorm.DB) error {
+			// deposit client wallet
+			err := utils.ClientAddBalance(tx, clientID, req.Amount)
+			if err != nil {
+				return err
+			}
+			err = utils.ClientLogTransaction(tx, clientID, req.Amount, "deposit")
+			if err != nil {
+				return err
+			}
+			// withdraw player wallet
+			err = utils.PlayerDeductBalance(tx, clientID, req.PlayerID, req.Amount)
+			if err != nil {
+				return err
+			}
+			err = utils.PlayerLogTransaction(tx, clientID, req.PlayerID, sql.NullInt64{Valid: false}, req.Amount, "withdraw")
+			if err != nil {
+				return err
+			}
+			// update new wallet
+			updatedClientWallet, err = utils.ClientWallet(tx, clientID)
+			if err != nil {
+				return err
+			}
+			updatedPlayerWallet, err = utils.PlayerWallet(tx, clientID, req.PlayerID)
+			if err != nil {
+				return err
+			}
+			return nil
+		})
+		if err != nil {
+			utils.JSONError(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		// RESPONSE
+		utils.JSONResponse(w, utils.Response{
+			Success: true,
+			Message: "player withdraw successfully",
+			Data: models.PlayerWalletResponse{
+				ClientWallet: updatedClientWallet,
+				Amount:       req.Amount,
+				PlayerWallet: updatedPlayerWallet,
+			},
+		}, http.StatusOK)
+
+	}
+}

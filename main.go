@@ -1,11 +1,10 @@
 package main
 
 import (
-	"database/sql"
 	"fmt"
 	"log"
 	"net/http"
-	"os"
+	"provider/config"
 	"provider/router"
 
 	"github.com/gorilla/mux"
@@ -13,23 +12,14 @@ import (
 )
 
 func main() {
-	dbURL := os.Getenv("DB_URL")
-	if dbURL == "" {
-		log.Fatal("Missing DB_URL enviroment variable")
-	}
-
-	db, err := sql.Open("postgres", dbURL)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer db.Close()
+	config.ConnectDatabase()
 
 	r := mux.NewRouter()
 
-	router.RegisterCLientRoutes(r, db)
-	router.RegisterPlayerRoutes(r, db)
-	router.RegisterAdminRoutes(r, db)
-	router.RegisterGameRoutes(r, db)
+	router.RegisterCLientRoutes(r, config.DB)
+	router.RegisterPlayerRoutes(r, config.DB)
+	router.RegisterAdminRoutes(r, config.DB)
+	router.RegisterGameRoutes(r, config.DB)
 
 	fmt.Println("Server started at :8080")
 	log.Fatal(http.ListenAndServe(":8080", r))

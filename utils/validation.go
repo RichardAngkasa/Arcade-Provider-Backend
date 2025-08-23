@@ -1,10 +1,12 @@
 package utils
 
 import (
-	"database/sql"
 	"encoding/json"
 	"errors"
 	"net/http"
+	"provider/models"
+
+	"gorm.io/gorm"
 )
 
 func BodyChecker(r *http.Request, req interface{}) error {
@@ -23,7 +25,7 @@ func AmountLessThanZero(ammount float64) error {
 	}
 }
 
-func RequestAmountGreaterThanBalance(ammount, balance float64) error {
+func RequestAmountGreaterThanBalanceForbidden(ammount, balance float64) error {
 	if ammount > balance {
 		return errors.New("insufficient balance")
 	} else {
@@ -31,76 +33,78 @@ func RequestAmountGreaterThanBalance(ammount, balance float64) error {
 	}
 }
 
-func RequestAmountLessThanBalance(ammount, balance float64) error {
-	if ammount < balance {
-		return nil
-	} else {
-		return errors.New("insufficient player balance")
-	}
-}
-
-func ClientExistenceByID(db *sql.DB, client_id int) error {
-	var exists bool
-	err := db.QueryRow(`
-		SELECT EXISTS (
-			SELECT 1 FROM clients WHERE id = $1
-		)
-	`, client_id).Scan(&exists)
+func ClientExistenceByID(db *gorm.DB, client_id int) error {
+	var client models.Client
+	err := db.
+		Where("id", client_id).
+		First(&client).Error
 	if err != nil {
-		return err
-	}
-	if !exists {
 		return errors.New("client not found")
 	}
-	return nil
+	return err
 }
 
-func PlayerExistenceUnderClientByUsername(db *sql.DB, client_id int, username string) error {
-	var exists bool
-	err := db.QueryRow(`
-		SELECT EXISTS (
-			SELECT 1 FROM players 
-			WHERE client_id = $1 AND username = $2
-		)
-	`, client_id, username).Scan(&exists)
-	if err != nil {
+func PlayerAlreadyExistUnderClientByUsername(db *gorm.DB, client_id int, username string) error {
+	var player models.Player
+	err := db.
+		Where("client_id = ? AND username = ?", client_id, username).
+		First(&player).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil
+	} else if err != nil {
 		return err
 	}
-	if exists {
-		return errors.New("player already exist under this client")
-	}
-	return nil
+	return errors.New("player already exist under this client")
 }
 
-func PlayerMustExistUnderClient(db *sql.DB, clientID, playerID int) error {
-	var exists bool
-	err := db.QueryRow(`
-        SELECT EXISTS (
-            SELECT 1 FROM players 
-            WHERE client_id = $1 AND id  = $2
-        )
-    `, clientID, playerID).Scan(&exists)
+func PlayerMustExistUnderClient(db *gorm.DB, playerID, clientID int) error {
+	var player models.Player
+	err := db.
+		Where("id = ? OR client_id = ?", playerID, clientID).
+		First(&player).Error
 	if err != nil {
-		return err
-	}
-	if !exists {
 		return errors.New("player not found under this client")
 	}
-	return nil
+	return err
 }
 
-func ClientUniqueness(db *sql.DB, username, email string) error {
-	var exists bool
-	err := db.QueryRow(`
-		SELECT EXISTS (
-			SELECT 1 FROM clients WHERE username=$1 OR email=$2
-		)
-	`, username, email).Scan(&exists)
-	if err != nil {
-		return err
-	}
-	if exists {
+func ClientUniqueness(db *gorm.DB, username, email string) error {
+	var client models.Client
+	err := db.
+		Where("username = ? OR email = ?", username, email).
+		First(&client).Error
+	if err == nil {
 		return errors.New("username or email already exists")
 	}
-	return nil
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil
+	}
+	return err
+}
+
+func GetClientIdByApiKey(db *gorm.DB, api_key string) (int, error) {
+	var clientID int
+	err := db.
+		Model(&models.Client{}).
+		Select("id").
+		Where("api_key = ?", api_key).
+		Scan(&clientID).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return 0, errors.New("invalid client")
+	} else if err != nil {
+		return 0, err
+	}
+	return clientID, nil
+}
+
+func GetClientIdByHeader(db *gorm.DB, r *http.Request) (int, error) {
+	apiKey := r.Header.Get("X-API-Key")
+	if apiKey == "" {
+		return 0, errors.New("api key missing")
+	}
+	clientID, err := GetClientIdByApiKey(db, apiKey)
+	if err != nil {
+		return 0, errors.New(err.Error())
+	}
+	return clientID, nil
 }

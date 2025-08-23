@@ -1,70 +1,48 @@
 package player
 
 import (
-	"database/sql"
 	"net/http"
 	"provider/models"
 	"provider/utils"
+
+	"gorm.io/gorm"
 )
 
-type ProfileRequest struct {
-	ID int `json:"id"`
-}
-
-type PlayerProfileResponse struct {
-	ID       int     `json:"id"`
-	Username string  `json:"username"`
-	Balance  float64 `json:"balance"`
-	ClientID int     `json:"client_id"`
-}
-
-func PlayerProfile(db *sql.DB) http.HandlerFunc {
+func PlayerProfile(db *gorm.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var req ProfileRequest
-		ClientApiKey := r.Header.Get("X-API-Key")
-
-		err := utils.BodyChecker(r, &req)
+		// AUTH
+		clientID, err := utils.GetClientIdByHeader(db, r)
+		if err != nil {
+			utils.JSONError(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		var req models.ProfileRequest
+		err = utils.BodyChecker(r, &req)
 		if err != nil {
 			utils.JSONError(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 
-		if ClientApiKey == "" {
-			utils.JSONError(w, "api key missing", http.StatusBadRequest)
-			return
-		}
-
-		clientID, err := utils.GetClientIdByApiKey(db, ClientApiKey)
-		if err != nil {
-			utils.JSONError(w, err.Error(), http.StatusUnauthorized)
-			return
-		}
-
+		// QUERY
 		var player models.Player
-		err = db.QueryRow(`
-			SELECT id, username 
-			FROM players 
-			WHERE id = $1 AND client_id = $2
-		`, req.ID, clientID).Scan(&player.ID, &player.Username)
+		err = db.
+			Where("id = ? AND client_id = ?", req.ID, clientID).
+			Preload("Wallet").
+			First(&player).Error
 		if err != nil {
 			utils.JSONError(w, "failed to fetch player profile", http.StatusInternalServerError)
 			return
 		}
 
-		wallet, err := utils.PlayerWallet(db, clientID, req.ID)
-		if err != nil {
-			utils.JSONError(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-
+		// RESPONSE
 		utils.JSONResponse(w, utils.Response{
 			Success: true,
 			Message: "player profile fetched",
-			Data: PlayerProfileResponse{
+			Data: models.Player{
 				ID:       player.ID,
 				Username: player.Username,
-				Balance:  wallet.Balance,
 				ClientID: clientID,
+				Wallet:   player.Wallet,
 			},
 		}, http.StatusOK)
 	}

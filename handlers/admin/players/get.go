@@ -1,44 +1,43 @@
 package players
 
 import (
-	"database/sql"
 	"net/http"
 	"provider/middleware"
 	"provider/models"
 	"provider/utils"
+
+	"gorm.io/gorm"
 )
 
-func AdminPlayerProfile(db *sql.DB) http.HandlerFunc {
+func AdminPlayerProfile(db *gorm.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// AUTH
 		_, err := middleware.MustAdminID(r)
 		if err != nil {
 			utils.JSONError(w, err.Error(), http.StatusUnauthorized)
 			return
 		}
-
-		var req struct {
-			ID int `json:"id"`
-		}
+		var req models.AdminGetRequest
 		err = utils.BodyChecker(r, &req)
 		if err != nil {
 			utils.JSONError(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 
+		// QUERY
 		var player models.Player
-		err = db.QueryRow(`
-			SELECT id, username, client_id
-			FROM players
-			WHERE id = $1 
-		`, req.ID).Scan(&player.ID, &player.Username, &player.ClientID)
+		err = db.
+			Preload("Wallet").
+			First(&player, req.ID).Error
 		if err != nil {
 			utils.JSONError(w, "failed to fetch player profile", http.StatusInternalServerError)
 			return
 		}
 
+		// RESPONSE
 		utils.JSONResponse(w, utils.Response{
 			Success: true,
-			Message: "profile fetched",
+			Message: "player profile fetched",
 			Data:    player,
 		}, http.StatusOK)
 	}

@@ -1,68 +1,67 @@
 package handlers
 
 import (
-	"database/sql"
 	"net/http"
+	"provider/models"
 	"provider/utils"
 	"strings"
+
+	"gorm.io/gorm"
 )
 
 type RegisterRequest struct {
 	Username string `json:"username"`
 }
 
-func PlayerRegister(db *sql.DB) http.HandlerFunc {
+func PlayerRegister(db *gorm.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		ClientApiKey := r.Header.Get("X-API-Key")
-		if ClientApiKey == "" {
-			utils.JSONError(w, "api key missing", http.StatusBadRequest)
-			return
-		}
-
-		var req RegisterRequest
-		err := utils.BodyChecker(r, &req)
+		// AUTH
+		clientID, err := utils.GetClientIdByHeader(db, r)
 		if err != nil {
 			utils.JSONError(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-
+		var req RegisterRequest
+		err = utils.BodyChecker(r, &req)
+		if err != nil {
+			utils.JSONError(w, err.Error(), http.StatusBadRequest)
+			return
+		}
 		req.Username = strings.ToLower(req.Username)
 		if req.Username == "" {
 			utils.JSONError(w, "username required", http.StatusBadRequest)
 			return
 		}
-
-		clientID, err := utils.GetClientIdByApiKey(db, ClientApiKey)
-		if err != nil {
-			utils.JSONError(w, err.Error(), http.StatusUnauthorized)
-			return
-		}
-
-		err = utils.PlayerExistenceUnderClientByUsername(db, clientID, req.Username)
+		err = utils.PlayerAlreadyExistUnderClientByUsername(db, clientID, req.Username)
 		if err != nil {
 			utils.JSONError(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 
-		var playerID int
-		err = db.QueryRow(`
-			INSERT INTO players (username, client_id) 
-			VALUES ($1, $2) RETURNING id
-		`, req.Username, clientID).Scan(&playerID)
+		// QUERY
+		player := models.Player{
+			Username: req.Username,
+			ClientID: clientID,
+		}
+		err = db.
+			Create(&player).Error
 		if err != nil {
-			utils.JSONError(w, "insert new user failed", http.StatusInternalServerError)
+			utils.JSONError(w, "insert new player failed", http.StatusInternalServerError)
+			return
+		}
+		playerWallet := models.PlayerWallet{
+			PlayerID: player.ID,
+			ClientID: clientID,
+			Balance:  0,
+		}
+		err = db.
+			Create(playerWallet).Error
+		if err != nil {
+			utils.JSONError(w, "failed creating new wallet for player", http.StatusInternalServerError)
 			return
 		}
 
-		_, err = db.Exec(`
-			INSERT INTO player_wallets (player_id, balance, client_id) 
-			VALUES ($1, $2, $3)
-		`, playerID, 0, clientID)
-		if err != nil {
-			utils.JSONError(w, "creating new wallet for player failed", http.StatusInternalServerError)
-			return
-		}
-
+		// RESPONSE
 		utils.JSONResponse(w, utils.Response{
 			Success: true,
 			Message: "client registered successfully",

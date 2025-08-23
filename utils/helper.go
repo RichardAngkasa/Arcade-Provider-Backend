@@ -1,20 +1,24 @@
 package utils
 
 import (
-	"database/sql"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
+
+	"golang.org/x/crypto/bcrypt"
 )
 
-func GetClientIdByApiKey(db *sql.DB, api_key string) (int, error) {
-	var clientID int
-	err := db.QueryRow(`
-		SELECT id FROM clients 
-		WHERE api_key = $1
-	`, api_key).Scan(&clientID)
-	if err == sql.ErrNoRows {
-		return 0, errors.New("invalid client")
-	} else if err != nil {
-		return 0, err
+func GeneratedAPIKey() string {
+	b := make([]byte, 32)
+	rand.Read(b)
+	return hex.EncodeToString(b)
+}
+
+func HashedPassword(password string) (string, error) {
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return "", errors.New("error hashing password")
 	}
-	return clientID, nil
+
+	return string(hashedPassword), nil
 }
