@@ -23,7 +23,7 @@ type ClientWalletTransaction struct {
 	ID             int     `json:"id"`
 	ClientID       int     `json:"client_id"`
 	Amount         float64 `json:"amount"`
-	Type           string  `json:"type"`
+	Type           string  `gorm:"type:text; not null"`
 	ClientWalletID int     `json:"client_wallet_id"`
 }
 

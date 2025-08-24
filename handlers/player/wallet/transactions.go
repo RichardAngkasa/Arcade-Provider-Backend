@@ -29,7 +29,7 @@ func PlayerTransactions(db *gorm.DB) http.HandlerFunc {
 		}
 
 		// QUERY
-		var transactions []models.PlayerWalletTransaction
+		var transactions []models.PlayerWalletTransactions
 		err = db.
 			Where("player_id = ? AND client_id = ?", req.PlayerID, clientID).
 			Order("created_at DESC").

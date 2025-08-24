@@ -19,7 +19,7 @@ func AdminTransactions(db *gorm.DB) http.HandlerFunc {
 		}
 
 		// QUERY
-		var transactions []models.AdminWalletTransaction
+		var transactions []models.AdminWalletTransactions
 		err = db.
 			Order("created_at DESC").
 			Find(&transactions).Error

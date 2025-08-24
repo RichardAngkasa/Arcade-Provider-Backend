@@ -15,7 +15,7 @@ func RunPikachuGameLogic(betAmount float64) (models.GameResult, error) {
 
 	rand.Seed(time.Now().UnixNano())
 
-	symbolPool := []string{"Pikachu", "Bulbasaur", "Charmander", "Squirtle", "Pokeball"}
+	symbolPool := []string{"Pikachu", "Bulbasaur", "Charmander"}
 
 	resultSymbols := map[string]string{
 		"slot1": symbolPool[rand.Intn(len(symbolPool))],
@@ -23,7 +23,7 @@ func RunPikachuGameLogic(betAmount float64) (models.GameResult, error) {
 		"slot3": symbolPool[rand.Intn(len(symbolPool))],
 	}
 
-	isWin := rand.Intn(2) == 1
+	isWin := resultSymbols["slot1"] == resultSymbols["slot2"] && resultSymbols["slot2"] == resultSymbols["slot3"]
 	var payout float64
 	var resultType string
 

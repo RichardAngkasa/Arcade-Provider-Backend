@@ -29,7 +29,7 @@ func ClientPlayerWithdraw(db *gorm.DB) http.HandlerFunc {
 			utils.JSONError(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		err = utils.PlayerMustExistUnderClient(db, req.PlayerID, clientID)
+		err = utils.PlayerMustExistUnderClient(db, clientID, req.PlayerID)
 		if err != nil {
 			utils.JSONError(w, err.Error(), http.StatusNotFound)
 			return

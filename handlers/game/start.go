@@ -77,14 +77,18 @@ func StartSpin(db *gorm.DB) http.HandlerFunc {
 			}
 			if result.Type == "lose" {
 				// log player lost
-				err = utils.PlayerLogTransaction(tx, clientID, req.PlayerID, sql.NullInt64{Int64: int64(gameSessionID), Valid: true}, result.Amount, "bet_lose_player")
+				err = utils.PlayerLogTransaction(tx, clientID, req.PlayerID, sql.NullInt64{Int64: int64(gameSessionID), Valid: true}, req.BetAmount, "bet_lose_player")
 				if err != nil {
 					return err
 				}
-				err = utils.ClientLogTransaction(tx, clientID, result.Amount, "bet_lose_player")
+				err = utils.ClientLogTransaction(tx, clientID, req.BetAmount, "bet_lose_player")
 				if err != nil {
 					return err
 				}
+			}
+			updatedPlayerWallet, err = utils.PlayerWallet(tx, clientID, req.PlayerID)
+			if err != nil {
+				return err
 			}
 			return nil
 		})

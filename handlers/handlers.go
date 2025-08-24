@@ -72,6 +72,9 @@ func ClientPlayerWithdraw(db *gorm.DB) http.HandlerFunc {
 func ClientPlayers(db *gorm.DB) http.HandlerFunc {
 	return client_players.ClientPlayers(db)
 }
+func ClientPlayerProfile(db *gorm.DB) http.HandlerFunc {
+	return client_players.ClientPlayerProfile(db)
+}
 
 // PLAYER
 func PlayerRegister(db *gorm.DB) http.HandlerFunc {

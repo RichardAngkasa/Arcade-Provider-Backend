@@ -21,6 +21,7 @@ func ClientPlayers(db *gorm.DB) http.HandlerFunc {
 		// QUERY
 		var players []models.Player
 		err = db.
+			Preload("Wallet").
 			Where("client_id = ?", clientID).
 			Order("created_at DESC").
 			Find(&players).Error

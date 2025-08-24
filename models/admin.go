@@ -12,9 +12,9 @@ type AdminGetRequest struct {
 	ID int `json:"id"`
 }
 
-type AdminWalletTransaction struct {
-	ID       int     `json:"id"`
+type AdminWalletTransactions struct {
+	ID       int     `gorm:"primaryKey;autoIncrement" json:"id"`
 	ClientID int     `json:"client_id"`
 	Amount   float64 `json:"amount"`
-	Type     string  `json:"type"`
+	Type     string  `gorm:"type:text; not null"`
 }

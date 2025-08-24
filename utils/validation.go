@@ -57,15 +57,17 @@ func PlayerAlreadyExistUnderClientByUsername(db *gorm.DB, client_id int, usernam
 	return errors.New("player already exist under this client")
 }
 
-func PlayerMustExistUnderClient(db *gorm.DB, playerID, clientID int) error {
+func PlayerMustExistUnderClient(db *gorm.DB, clientID, playerID int) error {
 	var player models.Player
 	err := db.
-		Where("id = ? OR client_id = ?", playerID, clientID).
+		Where("id = ? AND client_id = ?", playerID, clientID).
 		First(&player).Error
-	if err != nil {
+	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return errors.New("player not found under this client")
+	} else if err != nil {
+		return err
 	}
-	return err
+	return nil
 }
 
 func ClientUniqueness(db *gorm.DB, username, email string) error {
@@ -83,18 +85,17 @@ func ClientUniqueness(db *gorm.DB, username, email string) error {
 }
 
 func GetClientIdByApiKey(db *gorm.DB, api_key string) (int, error) {
-	var clientID int
+	var client models.Client
 	err := db.
-		Model(&models.Client{}).
 		Select("id").
 		Where("api_key = ?", api_key).
-		Scan(&clientID).Error
+		First(&client).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return 0, errors.New("invalid client")
 	} else if err != nil {
 		return 0, err
 	}
-	return clientID, nil
+	return client.ID, nil
 }
 
 func GetClientIdByHeader(db *gorm.DB, r *http.Request) (int, error) {

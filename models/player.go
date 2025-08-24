@@ -3,10 +3,10 @@ package models
 import "database/sql"
 
 type Player struct {
-	ID       int          `json:"id"`
+	ID       int          `gorm:"primaryKey;autoIncrement" json:"id"`
 	Username string       `json:"username"`
 	ClientID int          `json:"client_id"`
-	Wallet   PlayerWallet `json:"wallet"`
+	Wallet   PlayerWallet `gorm:"foreignKey:PlayerID" json:"wallet"`
 }
 type ProfileRequest struct {
 	ID int `json:"id"`
@@ -14,8 +14,8 @@ type ProfileRequest struct {
 
 // WALLET
 type PlayerWallet struct {
-	ID       int     `json:"id"`
-	PlayerID int     `json:"player_id"`
+	ID       int     `gorm:"primaryKey;autoIncrement" json:"id"`
+	PlayerID int     `gorm:"not null" json:"player_id"`
 	ClientID int     `json:"client_id"`
 	Balance  float64 `json:"balance"`
 }
@@ -31,12 +31,12 @@ type PlayerWalletResponse struct {
 type PlayerTransactionsRequest struct {
 	PlayerID int `json:"id"`
 }
-type PlayerWalletTransaction struct {
-	ID            int           `json:"id"`
+type PlayerWalletTransactions struct {
+	ID            int           `gorm:"primaryKey;autoIncrement" json:"id"`
 	ClientID      int           `json:"client_id"`
 	PlayerID      int           `json:"player_id"`
-	WalletID      int           `json:"wallet_id"`
+	WalletID      int           `gorm:"column:player_wallet_id" json:"player_wallet_id"`
 	GameSessionID sql.NullInt64 `json:"game_session_id"`
 	Amount        float64       `json:"amount"`
-	Type          string        `json:"type"`
+	Type          string        `gorm:"type:text; not null"`
 }

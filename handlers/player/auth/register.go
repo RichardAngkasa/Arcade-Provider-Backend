@@ -55,7 +55,7 @@ func PlayerRegister(db *gorm.DB) http.HandlerFunc {
 			Balance:  0,
 		}
 		err = db.
-			Create(playerWallet).Error
+			Create(&playerWallet).Error
 		if err != nil {
 			utils.JSONError(w, "failed creating new wallet for player", http.StatusInternalServerError)
 			return

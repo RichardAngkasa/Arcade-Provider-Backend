@@ -14,6 +14,7 @@ func RegisterCLientRoutes(r *mux.Router, db *gorm.DB) {
 	r.HandleFunc("/api/client/logout", handlers.ClientLogout()).Methods("POST")
 
 	r.Handle("/api/client/players", middleware.JwtAuthClient(handlers.ClientPlayers(db))).Methods("GET")
+	r.Handle("/api/client/player/profile", middleware.JwtAuthClient(handlers.ClientPlayerProfile(db))).Methods("GET")
 	r.Handle("/api/client/player/deposit", middleware.JwtAuthClient(handlers.ClientPlayerDeposit(db))).Methods("POST")
 	r.Handle("/api/client/player/withdraw", middleware.JwtAuthClient(handlers.ClientPlayerWithdraw(db))).Methods("POST")
 

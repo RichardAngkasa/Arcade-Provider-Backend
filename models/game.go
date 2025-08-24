@@ -2,7 +2,7 @@ package models
 
 type GameResult struct {
 	Symbols map[string]string `json:"symbols"`
-	Type    string            `json:"type"`
+	Type    string            `gorm:"type:text; not null"`
 	Amount  float64           `json:"amount"`
 }
 
@@ -14,7 +14,7 @@ type SpinRequest struct {
 
 type SpinResponse struct {
 	Symbols      map[string]string `json:"symbols"`
-	Type         string            `json:"type"`
+	Type         string            `gorm:"type:text; not null"`
 	Amount       float64           `json:"amount"`
 	PlayerWallet PlayerWallet      `json:"player_wallet"`
 }
@@ -26,5 +26,5 @@ type GameSession struct {
 	GameID       string  `json:"game_id"`
 	BetAmount    float64 `json:"bet_amount"`
 	ResultAmount float64 `json:"result_amount"`
-	Type         string  `json:"type"`
+	Type         string  `gorm:"type:text; not null"`
 }

@@ -21,6 +21,7 @@ func AdminClients(db *gorm.DB) http.HandlerFunc {
 		// QUERY
 		var clients []models.Client
 		err = db.
+			Preload("Wallet").
 			Order("created_at DESC").
 			Find(&clients).Error
 		if err != nil {
