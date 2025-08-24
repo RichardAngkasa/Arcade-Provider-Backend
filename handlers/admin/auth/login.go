@@ -1,10 +1,12 @@
 package auth
 
 import (
+	"fmt"
 	"net/http"
 	"os"
 	"provider/models"
 	"provider/utils"
+	"time"
 )
 
 func AdminLogin() http.HandlerFunc {
@@ -26,6 +28,15 @@ func AdminLogin() http.HandlerFunc {
 		token, err := utils.GenerateJWT(1, "admin")
 		if err != nil {
 			utils.JSONError(w, "token generation failed", http.StatusInternalServerError)
+			return
+		}
+		err = utils.RedisClient.Set(utils.Ctx,
+			"session:admin:"+fmt.Sprint(1),
+			token,
+			24*time.Hour,
+		).Err()
+		if err != nil {
+			utils.JSONError(w, "redis", http.StatusInternalServerError)
 			return
 		}
 		http.SetCookie(w, &http.Cookie{

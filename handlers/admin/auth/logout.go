@@ -7,9 +7,9 @@ import (
 	"provider/utils"
 )
 
-func ClientLogout() http.HandlerFunc {
+func AdminLogout() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		cookie, err := r.Cookie("jwt_token_client")
+		cookie, err := r.Cookie("jwt_token_admin")
 		if err != nil {
 			utils.JSONError(w, "no cookie", http.StatusUnauthorized)
 			return
@@ -20,11 +20,11 @@ func ClientLogout() http.HandlerFunc {
 			return
 		}
 		clientID := int(claims["id"].(float64))
-		redisKey := fmt.Sprintf("session:client:%d", clientID)
+		redisKey := fmt.Sprintf("session:admin:%d", clientID)
 		utils.RedisClient.Del(utils.Ctx, redisKey)
 
 		http.SetCookie(w, &http.Cookie{
-			Name:     "jwt_token_client",
+			Name:     "jwt_token_admin",
 			Value:    "",
 			Path:     "/",
 			MaxAge:   -1,

@@ -1,11 +1,13 @@
-package handlers
+package auth
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"provider/models"
 	utils "provider/utils"
 	"strings"
+	"time"
 
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
@@ -47,6 +49,15 @@ func ClientLogin(db *gorm.DB) http.HandlerFunc {
 		token, err := utils.GenerateJWT(client.ID, "client")
 		if err != nil {
 			utils.JSONError(w, "token generation failed", http.StatusInternalServerError)
+			return
+		}
+		err = utils.RedisClient.Set(utils.Ctx,
+			"session:client:"+fmt.Sprint(client.ID),
+			token,
+			24*time.Hour,
+		).Err()
+		if err != nil {
+			utils.JSONError(w, "redis", http.StatusInternalServerError)
 			return
 		}
 		http.SetCookie(w, &http.Cookie{

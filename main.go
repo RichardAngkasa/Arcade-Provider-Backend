@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"provider/config"
 	"provider/router"
+	"provider/utils"
 
 	"github.com/gorilla/mux"
 	_ "github.com/lib/pq"
@@ -13,6 +14,7 @@ import (
 
 func main() {
 	config.ConnectDatabase()
+	utils.InitRedis()
 
 	r := mux.NewRouter()
 
