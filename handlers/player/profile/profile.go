@@ -16,17 +16,15 @@ func PlayerProfile(db *gorm.DB) http.HandlerFunc {
 			utils.JSONError(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		var req models.ProfileRequest
-		err = utils.BodyChecker(r, &req)
+		playerID, err := utils.GetIDfromQuery(r)
 		if err != nil {
 			utils.JSONError(w, err.Error(), http.StatusBadRequest)
-			return
 		}
 
 		// QUERY
 		var player models.Player
 		err = db.
-			Where("id = ? AND client_id = ?", req.ID, clientID).
+			Where("id = ? AND client_id = ?", playerID, clientID).
 			Preload("Wallet").
 			First(&player).Error
 		if err != nil {

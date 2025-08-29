@@ -8,10 +8,6 @@ type AdminLoginResponse struct {
 	Token string `json:"token"`
 }
 
-type AdminGetRequest struct {
-	ID int `json:"id"`
-}
-
 type AdminWalletTransactions struct {
 	ID       int     `gorm:"primaryKey;autoIncrement" json:"id"`
 	ClientID int     `json:"client_id"`

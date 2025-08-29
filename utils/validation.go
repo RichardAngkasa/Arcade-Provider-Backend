@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"provider/models"
+	"strconv"
 
 	"gorm.io/gorm"
 )
@@ -15,6 +16,18 @@ func BodyChecker(r *http.Request, req interface{}) error {
 		return errors.New("invalid request")
 	}
 	return nil
+}
+
+func GetIDfromQuery(r *http.Request) (int, error) {
+	idStr := r.URL.Query().Get("id")
+	if idStr == "" {
+		return 0, errors.New("missing id query parameter")
+	}
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		return 0, errors.New("invalid id format")
+	}
+	return id, nil
 }
 
 func AmountLessThanZero(ammount float64) error {

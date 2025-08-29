@@ -17,18 +17,16 @@ func AdminPlayerProfile(db *gorm.DB) http.HandlerFunc {
 			utils.JSONError(w, err.Error(), http.StatusUnauthorized)
 			return
 		}
-		var req models.AdminGetRequest
-		err = utils.BodyChecker(r, &req)
+		playerID, err := utils.GetIDfromQuery(r)
 		if err != nil {
 			utils.JSONError(w, err.Error(), http.StatusBadRequest)
-			return
 		}
 
 		// QUERY
 		var player models.Player
 		err = db.
 			Preload("Wallet").
-			First(&player, req.ID).Error
+			First(&player, playerID).Error
 		if err != nil {
 			utils.JSONError(w, "failed to fetch player profile", http.StatusInternalServerError)
 			return

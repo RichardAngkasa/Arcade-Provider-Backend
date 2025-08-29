@@ -8,9 +8,6 @@ type Player struct {
 	ClientID int          `json:"client_id"`
 	Wallet   PlayerWallet `gorm:"foreignKey:PlayerID" json:"wallet"`
 }
-type ProfileRequest struct {
-	ID int `json:"id"`
-}
 
 // WALLET
 type PlayerWallet struct {
@@ -27,9 +24,6 @@ type PlayerWalletResponse struct {
 	ClientWallet ClientWallet `json:"client_wallet"`
 	Amount       float64      `json:"amount"`
 	PlayerWallet PlayerWallet `json:"player_wallet"`
-}
-type PlayerTransactionsRequest struct {
-	PlayerID int `json:"id"`
 }
 type PlayerWalletTransactions struct {
 	ID            int           `gorm:"primaryKey;autoIncrement" json:"id"`
