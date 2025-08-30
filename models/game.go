@@ -14,7 +14,7 @@ type SpinRequest struct {
 
 type SpinResponse struct {
 	Symbols      map[string]string `json:"symbols"`
-	Type         string            `gorm:"type:text; not null"`
+	Type         string            `json:"type" gorm:"type:text; not null"`
 	Amount       float64           `json:"amount"`
 	PlayerWallet PlayerWallet      `json:"player_wallet"`
 }
